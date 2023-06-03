@@ -1,3 +1,3 @@
 # effuse
 
-Add project description here.
+Algebraic Effects for Janet
