@@ -10,10 +10,11 @@
   [& body]
   ~(: (,go-op) (fn [] ,;body)))
 
-(defn- cancel-all [fibers reason]
-  (each f fibers
-    (ev/cancel f reason)
-    (put fibers f nil)))
+(defn- cancel-all [chan fibers reason]
+  (each f fibers (ev/cancel f reason))
+  (while (not (empty? fibers))
+    (def [_ fiber] (ev/take chan))
+    (put fibers fiber nil)))
 
 (defn- wait-for-fibers
   [chan fibers]
@@ -22,7 +23,7 @@
     (if (= sig :ok)
       (put fibers fiber nil)
       (do
-        (cancel-all fibers "sibling canceled")
+        (cancel-all chan fibers "sibling canceled")
         (propagate (fiber/last-value fiber) fiber)))))
 
 (defn goscope
@@ -47,11 +48,7 @@
   (with-in
     [go-handler]
 
-    (defer (when (length fibers)
-             (cancel-all fibers "parent canceled")
-             # REVIEW: Is a zero sleep guaranteed to allow all canceled fibers
-             # to complete?
-             (ev/sleep 0))
+    (defer (cancel-all chan fibers "parent canceled")
       (def result (action))
       (wait-for-fibers chan fibers)
       result)))

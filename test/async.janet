@@ -69,14 +69,13 @@
 
      (go (array/push captured :charlie))))
 
-  (assert (deep= @[:bravo :alfa :charlie] captured)))
+  (assert (deep= @[:bravo :charlie :alfa] captured)))
 
 (do
   :cancel-multiple
 
   (def captured @[])
   (def ch (ev/chan))
-
 
   (assert
    (= [false "canceled"]
@@ -93,7 +92,6 @@
 
   (sort captured)
   (assert (deep= @[:alfa :bravo] captured)))
-
 
 (do
   :cancellation
