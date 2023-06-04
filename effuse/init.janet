@@ -76,7 +76,7 @@
       (let [evv (require-evv)]
         (match (yield [:effuse/perform kind hnd (tuple/slice evv 0 index) args])
           [:effuse/abort fib err] (propagate err fib)
-          [:effuse/finalize _ value] (return [eff-hnd index] value)
+          [:effuse/finalize _ value] (signal 0 [eff-hnd index value])
           [:effuse/resume fib value]
           (do
             # ctl/raw handlers may have (resume) in tail position, but there is
@@ -145,27 +145,37 @@
                 (effect/name eff)
                 (string/join missing-names ", ")))))
 
-  (let [ret (in spec :ret identity)]
-    (fn hnd [action & args]
-      # TODO: Manually managing the *evv* dyn instead of using with-dyns can
-      # reduce the number of fibers created here.  We could guarantee exactly
-      # one fiber per handler, I think. (The with-dyns, defer, and prompt can be
-      # combined.)
+  (fn hnd [action]
+    # This is a fused version of the functionality present in with-dyns,
+    # defer, and prompt.
 
-      (let [evv (require-evv)
-            pending @[]]
-        (with-dyns [*evv* [;evv spec]
-                    *pending* pending]
-          (defer
-            (while (not (empty? pending))
-              (let [fib (array/pop pending)]
-                (while true
-                  (let [value (resume fib)]
-                    (if (= (fiber/status fib) :dead)
-                      (break)
-                      (propagate value fib))))))
-            (prompt [spec (length evv)]
-              (ret (action ;args)))))))))
+    (def evv (require-evv))
+    (def pending @[])
+
+    (defn thunk []
+      (setdyn *evv* [;evv spec])
+      (setdyn *pending* pending)
+
+      (def ret (in spec :ret identity))
+      (ret (action)))
+
+    (def fiber (fiber/new thunk :pt))
+    (def result (resume fiber))
+
+    (while (not (empty? pending))
+      (let [fib (array/pop pending)]
+        (while true
+          (resume fib)
+          (if (= (fiber/status fib) :dead)
+            (break)
+            (propagate (fiber/last-value fib) fib)))))
+
+    (case (fiber/status fiber)
+      :dead result
+      :user0 (match result
+               [(@ spec) (length evv) payload] payload
+               _ (propagate result fiber))
+      (propagate result fiber))))
 
 (def errs/effect-handler-format :private "invalid effect handler format")
 
