@@ -169,7 +169,7 @@
 
   (def captured @[])
 
-  (def [_ {:eff-a eff-a}] (effect :eff-a))
+  (def {:eff-a eff-a} (effect :eff-a))
 
   (assert
    (= [false "canceled"]
@@ -184,7 +184,7 @@
                    (defer (array/push captured :alfa)
                      (hang))))]
                (array/push captured :charlie)
-               (: eff-a)
+               (eff-a)
                (array/push captured :delta))))
 
           (ev/sleep 0)
@@ -196,11 +196,11 @@
    :cancel-higher-scope-effect
 
    (def captured @[])
-   (def [_ {:eff-a eff-a}] (effect :eff-a))
+   (def {:eff-a eff-a} (effect :eff-a))
 
    (protect
     (run
-      (with-in
+     (with-in
        [(handler
          (fn eff-a []
            (defer (array/push captured :alfa)
@@ -210,7 +210,7 @@
        (go
         (defer (array/push captured :bravo)
           (array/push captured :charlie)
-          (: eff-a)
+          (eff-a)
           (array/push captured :delta)))
 
        (ev/sleep 0)

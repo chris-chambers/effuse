@@ -1,3 +1,5 @@
+(import effuse/internal :as internal)
+
 (defdyn *evv*
   :private)
 
@@ -19,18 +21,19 @@
     pending))
 
 (defn op/effect
+  "Get the effect an operation is part of."
   [op]
-  (op :effect))
+  (internal/op/effect op))
 
-(def ops-key :private (gensym))
+(defn op/name
+  "Get the name of an operation."
+  [op]
+  (internal/op/name op))
 
 (defn effect/name
+  "Get the name of an effect."
   [eff]
-  (in eff :_name))
-
-(defn effect/ops
-  [eff]
-  ((in eff ops-key) eff))
+  (internal/effect/name eff))
 
 (defn- rfind-index
   [pred ind &opt start]
@@ -49,7 +52,7 @@
   {:ty (fn [Effect] [EffectHandler int])}
   [eff &opt op]
 
-  (default op (first (values (effect/ops eff))))
+  (default op (first (values eff)))
 
   (let [evv (require-evv)]
     (def index (rfind-index |(in $ op) evv))
@@ -66,8 +69,10 @@
         eff-hnd (in evv index)]
     [eff-hnd (in eff-hnd op) index]))
 
-(defn- op/invoke
+(defn- invoke
   [op & args]
+
+  (internal/op/check-arity op (length args))
 
   (let [[eff-hnd [kind hnd] index] (get-op-handler op)]
     (if (= kind :fun)
@@ -85,31 +90,20 @@
             value)
           x (errorf "internal error: malformed operation result: %q" x))))))
 
-(defn- operation
-  [eff name]
-
-  (struct/with-proto {:_name (string (in eff :_name) "/" name)
-                      :effect eff
-                      : op/invoke}))
-
-(defn op/name
-  [op]
-  (in op :_name))
-
 (defn effect
-  [name &opt opnames]
+  [name &opt opspec]
 
-  (default opnames [name])
+  (default opspec [[name -1 -1]])
 
-  (var ops nil)
-  (def eff (struct/with-proto {:_name name ops-key (fn [self] ops)}))
+  (internal/effect name
+                   (->> opspec
+                        (map (fn [[name min-arity max-arity]]
+                               (default min-arity -1)
+                               (default max-arity min-arity)
 
-  (def tmp @{})
-  (each opname opnames
-    (put tmp opname (operation eff opname)))
-  (set ops (table/to-struct tmp))
-
-  [eff ops])
+                               [name min-arity max-arity]))
+                        (tuple/slice))
+                   invoke))
 
 (defn handler*
   [spec]
@@ -135,12 +129,12 @@
   (when eff
     (def missing-ops @[])
 
-    (each op (effect/ops eff)
+    (each op eff
       (unless (in spec op)
         (array/push missing-ops op)))
 
     (unless (empty? missing-ops)
-      (let [missing-names (map op/name missing-ops)]
+      (let [missing-names (map string missing-ops)]
         (errorf "handler must implement all operations for '%s'.  missing %s"
                 (effect/name eff)
                 (string/join missing-names ", ")))))
@@ -240,7 +234,7 @@
 
     (def evv (require-evv))
     (def orig-index (get-effect-handler-index eff))
-    (def anyop (first (values (effect/ops eff))))
+    (def anyop (first (values eff)))
     (def mask-index (rfind-index |(in $ anyop) evv (dec orig-index)))
     (def dest-index (inc mask-index))
 

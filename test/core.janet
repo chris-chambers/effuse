@@ -11,7 +11,7 @@
 (do
   :incomplete-effect-definition
 
-  (def [_ {:get state/get :put state/put}] (effect :state [:get :put]))
+  (def {:get state/get :put state/put} (effect :state [[:get 0] [:put 1]]))
 
   (assert
    (=
@@ -21,7 +21,7 @@
 (do
   :handler-visibility
 
-  (def [_ {:foo foo}] (effect :foo))
+  (def {:foo foo} (effect :foo))
   (def captured @[])
 
   (run
@@ -35,8 +35,8 @@
        [(handler
          (fn foo [arg]
            (array/push captured :inner)
-           (: foo arg)))]
-       (: foo :bar))))
+           (foo arg)))]
+       (foo :bar))))
 
   (assert (deep= @[:before :inner :outer :bar] captured)))
 
@@ -45,28 +45,28 @@
 
   (def captured @[])
 
-  (def [_ {:foo foo}] (effect :foo))
+  (def {:foo foo} (effect :foo))
   (def capture-handler (handler (fn foo [s] (array/push captured s))))
 
   (run
    (with-in
     [capture-handler]
-    (: foo :foo)))
+    (foo :foo)))
 
   (assert (deep= @[:foo] captured)))
 
 (do
   :handler-not-found
 
-  (def [_ {:foo foo}] (effect :foo))
+  (def {:foo foo} (effect :foo))
   (assert (= [false "no handler found for effect: foo"]
-             (protect (run (: foo))))))
+             (protect (run (foo))))))
 
 (do
    :ctl-no-resume
 
    (def captured @[])
-   (def [_ {:skip skip}] (effect :skip))
+   (def {:skip skip} (effect :skip))
 
    (def result
      (run
@@ -74,7 +74,7 @@
         [(handler (ctl skip [] 1234))] # NOTE: no (resume)
 
         (array/push captured :alfa)
-        (: skip)
+        (skip)
         (array/push captured :bravo))))
    (assert (= 1234 result))
    (assert (deep= @[:alfa] captured)))
@@ -83,7 +83,7 @@
   :ctl-defer-no-resume
 
   (def captured @[])
-  (def [_ {:skip skip}] (effect :skip))
+  (def {:skip skip} (effect :skip))
 
   (def result
     (run
@@ -91,7 +91,7 @@
        [(handler (ctl skip [] 1234))] # NOTE: no (resume)
        (defer (array/push captured :alfa)
          (array/push captured :bravo)
-         (: skip)
+         (skip)
          (array/push captured :charlie)))))
   (assert (= 1234 result))
   (assert (deep= @[:bravo :alfa] captured)))
@@ -100,7 +100,7 @@
    :raw-ctl-abort
 
    (def captured @[])
-   (def [_ {:explode explode}] (effect :explode))
+   (def {:explode explode} (effect :explode))
 
    (assert
     (= [false :exploded]
@@ -113,7 +113,7 @@
                             (array/push captured :delta)))]
 
              (array/push captured :bravo)
-             (: explode)
+             (explode)
              (array/push captured :charlie)
              nil))
          :exploded))))
@@ -123,8 +123,8 @@
   :raw-ctl-abort-nested
 
   (def captured @[])
-  (def [_ {:explode explode}] (effect :explode))
-  (def [_ {:nested nested}] (effect :nested))
+  (def {:explode explode} (effect :explode))
+  (def {:nested nested} (effect :nested))
 
   (assert
    (= [false :exploded]
@@ -136,10 +136,10 @@
                            (error :exploded)))
              (handler (fn nested []
                         (defer (array/push captured :bravo)
-                          (: explode))))]
+                          (explode))))]
 
             (array/push captured :charlie)
-            (: nested)
+            (nested)
             (array/push captured :delta)
             nil))))))
   (assert (deep= @[:charlie :bravo :alfa] captured)))
@@ -149,14 +149,14 @@
 
   (def captured @[])
 
-  (def [_ {:foo foo}] (effect :foo))
+  (def {:foo foo} (effect :foo))
 
   (run
    (with-in
      [(handler
        (ctl foo []
             (resume :alfa)))]
-     (array/push captured (: foo))))
+     (array/push captured (foo))))
 
   (assert (deep= @[:alfa] captured)))
 
@@ -165,7 +165,7 @@
 
   (def captured @[])
 
-  (def [_ {:foo foo}] (effect :foo))
+  (def {:foo foo} (effect :foo))
 
   (run
    (with-in
@@ -173,7 +173,7 @@
        (ctl foo []
             (resume :alfa)
             (array/push captured :bravo)))]
-     (array/push captured (: foo))))
+     (array/push captured (foo))))
 
   (assert (deep= @[:alfa :bravo] captured)))
 
@@ -181,7 +181,8 @@
   :mask
 
   (def captured @[])
-  (def [a-effect {:a a}] (effect :a))
+  (def a-effect (effect :a))
+  (def {:a a} a-effect)
 
   (run
    (with-in
@@ -191,10 +192,10 @@
       (handler
        (fn a []
          (array/push captured :inner)))]
-     (: a)
+     (a)
      (with-in
        [(mask a-effect)]
-       (: a))))
+       (a))))
 
   (assert (deep= @[:inner :outer] captured)))
 
@@ -202,8 +203,9 @@
   :mask-behind
 
   (def captured @[])
-  (def [a-effect {:a a}] (effect :a))
-  (def [_ {:b b}] (effect :b))
+  (def a-effect (effect :a))
+  (def {:a a} a-effect)
+  (def {:b b} (effect :b))
 
   (run
    (with-in
@@ -212,12 +214,12 @@
         (array/push captured :outer)))
      (handler
       (fn b []
-        (: a)))
+        (a)))
      (handler
       (fn a []
         (array/push captured :inner)))
      (mask-behind a-effect)]
-    (: b)))
+    (b)))
 
   (assert (deep= @[:inner] captured)))
 
@@ -225,18 +227,18 @@
 (do
   :ctl-handler-errors-preserve-callstack
 
-  (def [_ {:foo foo}] (effect :foo))
-  (def [_ {:bar bar}] (effect :bar))
+  (def {:foo foo} (effect :foo))
+  (def {:bar bar} (effect :bar))
 
   (defn some-fn
     []
     (with-in
       [(handler (ctl foo [] (error :bonk)))
        (handler (ctl bar []
-                     (: foo)
+                     (foo)
                      # prevent TCO to preserve function names
                      nil))]
-      (: bar))
+      (bar))
     # prevent TCO to preserve function names
     nil)
 

@@ -1,14 +1,11 @@
 (use ./init)
 
-(def [go-effect {:go go*}] (effect :go))
-
-# TODO: Is there a way to write the go macro that doesn't require this
-# indirection?
-(defn- go-op [] go*)
+(def go-effect (effect :go))
+(def {:go go*} go-effect)
 
 (defmacro go
   [& body]
-  ~(: (,go-op) (fn [] ,;body)))
+  ~(,go* (fn [] ,;body)))
 
 (defn- cancel-all [chan fibers reason]
   (each f fibers (ev/cancel f reason))

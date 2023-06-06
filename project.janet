@@ -7,3 +7,7 @@
   :prefix "effuse"
   :source ["effuse/init.janet"
            "effuse/async.janet"])
+
+(declare-native
+  :name "effuse/internal"
+  :source @["src/internal.c"])
