@@ -105,7 +105,7 @@
           [goscope]
 
           (array/push captured :alfa)
-          (go (array/push captured :bravo))
+          (go (ev/sleep 0) (array/push captured :bravo))
           (error "canceled")
           (array/push captured :charlie))))))
 
@@ -123,7 +123,7 @@
     (run
      (with-in
        [goscope]
-       (go (array/push captured :NO-alfa))
+       (go (ev/sleep 0) (array/push captured :NO-alfa))
        (error "canceled"))))))
  (assert (deep= @[] captured)))
 
@@ -217,5 +217,26 @@
        (error "canceled"))))
 
    (assert (deep= @[:charlie :alfa :bravo] captured)))
+
+
+(do
+  :cancel-parent
+
+  (def captured @[])
+  (def ch (ev/chan))
+
+  (assert
+   (= [false :x]
+      (protect
+       (run
+        (with-in
+          [goscope]
+
+          (go (ev/sleep 0) (array/push captured :alfa) (error :x))
+
+          (array/push captured :bravo)
+          (hang))))))
+
+  (assert (deep= @[:bravo :alfa] captured)))
 
 (end-suite)

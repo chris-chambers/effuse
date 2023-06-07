@@ -7,8 +7,10 @@
   [& body]
   ~(,go* (fn [] ,;body)))
 
-(defn- cancel-all [chan fibers reason]
-  (each f fibers (ev/cancel f reason))
+(def canceled (gensym))
+
+(defn- cancel-all [chan fibers]
+  (each f fibers (ev/cancel f canceled))
   (while (not (empty? fibers))
     (def [_ fiber] (ev/take chan))
     (put fibers fiber nil)))
@@ -16,12 +18,17 @@
 (defn- wait-for-fibers
   [chan fibers]
   (while (not (empty? fibers))
-    (def [sig fiber] (ev/take chan))
-    (if (= sig :ok)
-      (put fibers fiber nil)
-      (do
-        (cancel-all chan fibers "sibling canceled")
-        (propagate (fiber/last-value fiber) fiber)))))
+
+    (def [sig fiber] (try (ev/take chan)
+                          ([err fib]
+                           (cancel-all chan fibers)
+                           (propagate err fib))))
+    (put fibers fiber nil)
+    (when (not= sig :ok)
+      (cancel-all chan fibers)
+      (def err (fiber/last-value fiber))
+      (when (not= err canceled)
+        (propagate err fiber)))))
 
 (defn goscope
   [action]
@@ -42,10 +49,9 @@
           (def fiber (ev/go go-handler f chan))
           (put fibers fiber fiber))))
 
-  (with-in
-    [go-handler]
+  (var result nil)
+  (def fiber (ev/go go-handler |(set result (action)) chan))
+  (put fibers fiber fiber)
 
-    (defer (cancel-all chan fibers "parent canceled")
-      (def result (action))
-      (wait-for-fibers chan fibers)
-      result)))
+  (wait-for-fibers chan fibers)
+  result)
