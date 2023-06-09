@@ -171,7 +171,7 @@
                _ (propagate result fiber))
       (propagate result fiber))))
 
-(def errs/effect-handler-format :private "invalid effect handler format")
+(def- errs/effect-handler-format "invalid effect handler format")
 
 (defn- rewrite-handler-fn [spec]
   (unless (and (tuple? spec)
